@@ -41,4 +41,6 @@ dependencies {
     // For App Authentication APIs
     implementation "androidx.security:security-app-authenticator:1.0.0-alpha02"
     implementation "com.google.crypto.tink:tink-android:1.5.0"
+    // for biometric authorization
+    implementation "androidx.biometric:biometric:1.1.0"
 }
