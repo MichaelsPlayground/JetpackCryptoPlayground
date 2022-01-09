@@ -6,6 +6,7 @@ import static androidx.security.crypto.MasterKey.DEFAULT_MASTER_KEY_ALIAS;
 import android.app.Activity;
 import android.app.Application;
 import android.content.Context;
+import android.hardware.biometrics.BiometricManager;
 import android.hardware.biometrics.BiometricPrompt;
 import android.hardware.biometrics.BiometricPrompt.Builder;
 import android.os.Build;
@@ -20,7 +21,7 @@ import android.widget.Button;
 import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.biometric.BiometricManager;
+
 import androidx.fragment.app.FragmentActivity;
 import androidx.security.crypto.EncryptedFile;
 import androidx.security.crypto.MasterKey;
@@ -73,6 +74,11 @@ public class MainActivity extends AppCompatActivity {
                 // recommended that you use the value specified here.
                 try {
                     // this is equivalent to using deprecated MasterKeys.AES256_GCM_SPEC
+
+                    // short one
+                    masterKey = getOrCreateMasterKey(getApplication());
+
+                    /* long one
                     KeyGenParameterSpec spec = new KeyGenParameterSpec.Builder(
                             DEFAULT_MASTER_KEY_ALIAS,
                             KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
@@ -83,7 +89,10 @@ public class MainActivity extends AppCompatActivity {
                     masterKey = new MasterKey.Builder(MainActivity.this)
                             .setKeyGenParameterSpec(spec)
                             .setUserAuthenticationRequired(true) // true needs a biometric release
+                            .setRequestStrongBoxBacked(false) // true needs a device with TEE
                             .build();
+                    */
+
                 } catch (GeneralSecurityException | IOException e) {
                     e.printStackTrace();
                     System.out.println("error: " + e.toString());
@@ -359,11 +368,46 @@ public class MainActivity extends AppCompatActivity {
             }
         });
         //int authenticators = BiometricManager.Authenticators.DEVICE_CREDENTIAL | BiometricManager.Authenticators.BIOMETRIC_WEAK;
-        int authenticators = BiometricManager.Authenticators.DEVICE_CREDENTIAL | BiometricManager.Authenticators.BIOMETRIC_STRONG;
+
         //BiometricPrompt.PromptInfo promptInfo = new BiometricPrompt.PromptInfo.Builder().setTitle(activity.g etString(R.string.biometricAuthentificationRequired)).setAllowedAuthenticators(authenticators).build();
         //BiometricPrompt.PromptInfo promptInfo = new BiometricPrompt.PromptInfo.Builder().setTitle("biometric Authentification Required").setAllowedAuthenticators(authenticators).build();
-        androidx.biometric.BiometricPrompt.PromptInfo promptInfo = new androidx.biometric.BiometricPrompt.PromptInfo.Builder().setTitle("Zugang zur App nur mit\nFingerprint oder Geräte PIN").setAllowedAuthenticators(authenticators).build();
-        prompt.authenticate(promptInfo);
+        //androidx.biometric.BiometricPrompt.PromptInfo promptInfo = new androidx.biometric.BiometricPrompt.PromptInfo.Builder().setTitle("Zugang zur App nur mit\nFingerprint oder Geräte PIN").setAllowedAuthenticators(authenticators).build();
+
+        // need to check allowed authenticators depending on sdk
+        int authenticators = BiometricManager.Authenticators.DEVICE_CREDENTIAL;
+        // api 30+
+        if (android.os.Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            authenticators = BiometricManager.Authenticators.DEVICE_CREDENTIAL | BiometricManager.Authenticators.BIOMETRIC_STRONG;
+        }
+        // api 23-29
+        if (android.os.Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
+                android.os.Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            authenticators = BiometricManager.Authenticators.DEVICE_CREDENTIAL;
+        }
+
+        // api 23+
+        if (android.os.Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            androidx.biometric.BiometricPrompt.PromptInfo promptInfo = new androidx.biometric.BiometricPrompt.PromptInfo.Builder()
+                    .setTitle("Zugang zur App nur mit\nFingerprint oder Geräte PIN")
+                    .setAllowedAuthenticators(authenticators)
+                    //.setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+                    //.setAllowedAuthenticators(BiometricManager.Authenticators.DEVICE_CREDENTIAL | BiometricManager.Authenticators.BIOMETRIC_STRONG)
+                    .build();
+            prompt.authenticate(promptInfo);
+        }
+        // api 21-22 does not support setAllowedAuthenticators
+        if (android.os.Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP &&
+                android.os.Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+
+                androidx.biometric.BiometricPrompt.PromptInfo promptInfo = new androidx.biometric.BiometricPrompt.PromptInfo.Builder()
+                        .setTitle("Zugang zur App nur mit\nFingerprint oder Geräte PIN")
+                        .setDeviceCredentialAllowed(true)
+                        //.setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+                        //.setAllowedAuthenticators(BiometricManager.Authenticators.DEVICE_CREDENTIAL | BiometricManager.Authenticators.BIOMETRIC_STRONG)
+                        .build();
+                prompt.authenticate(promptInfo);
+        }
+
     }
 
 
@@ -371,8 +415,9 @@ public class MainActivity extends AppCompatActivity {
             throws IOException, GeneralSecurityException {
         return new MasterKey.Builder(application)
                 .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .setUserAuthenticationRequired(true)
                 //.setUserAuthenticationRequired(true, 3600)
-                //.setRequestStrongBoxBacked(true)
+                .setRequestStrongBoxBacked(true)
                 .build();
     }
 }
